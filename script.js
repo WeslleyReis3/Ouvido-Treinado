@@ -189,6 +189,23 @@ function getRankingLocal() {
   }
 }
 
+function formatDisplayDate(value) {
+  if (!value) return "-";
+  if (/^\d{2}\/\d{2}\/\d{4}$/.test(String(value))) {
+    return String(value);
+  }
+
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) {
+    return String(value);
+  }
+
+  const day = String(date.getDate()).padStart(2, "0");
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const year = date.getFullYear();
+  return `${day}/${month}/${year}`;
+}
+
 function setAuthMode(registerMode) {
   isRegisterMode = registerMode;
   authForm.classList.toggle("hidden", registerMode);
@@ -816,7 +833,7 @@ async function renderRanking() {
 
     const meta = document.createElement("span");
     meta.className = "ranking-meta";
-    meta.textContent = `Fase ${entry.phase} • ${entry.date}`;
+    meta.textContent = `Fase ${entry.phase} • ${formatDisplayDate(entry.date)}`;
 
     item.append(position, player, meta);
     rankingList.appendChild(item);
@@ -956,7 +973,7 @@ async function renderMasterDashboard() {
       <td>${user.nickname}</td>
       <td>${stats.bestScore || 0} pts</td>
       <td>${stats.bestPhase || stats.lastPhase || 0}</td>
-      <td>${stats.lastDate || "-"}</td>
+      <td>${formatDisplayDate(stats.lastDate || "-")}</td>
       <td class="phase-errors">${errorText}</td>
     `;
 
