@@ -18,6 +18,7 @@ const AUTH_KEY = "ouvido-treinado-user";
 const USERS_KEY = "ouvido-treinado-users";
 const MASTER_NICKNAME = "WREIS";
 const MASTER_PASSWORD = "@Qaz123*";
+const APPS_SCRIPT_URL = window.APP_CONFIG?.appsScriptUrl || "";
 
 let audioContext;
 let currentPhase = 1;
@@ -99,14 +100,81 @@ clearButton.addEventListener("click", () => {
   setFeedback("Monte sua resposta com as notas disponíveis.", "");
 });
 
-renderRanking();
+void renderRanking();
 restoreUserSession();
 setAuthMode(false);
 updateDashboard();
 
-/**
- * Alterna entre os modos de login e cadastro da área de autenticação.
- */
+function isRemoteBackendEnabled() {
+  return Boolean(APPS_SCRIPT_URL);
+}
+
+async function apiPost(action, payload = {}) {
+  const response = await fetch(APPS_SCRIPT_URL, {
+    method: "POST",
+    headers: {
+      "Content-Type": "text/plain;charset=utf-8"
+    },
+    body: JSON.stringify({ action, ...payload })
+  });
+
+  return response.json();
+}
+
+async function apiGet(action) {
+  const url = new URL(APPS_SCRIPT_URL);
+  url.searchParams.set("action", action);
+  const response = await fetch(url.toString());
+  return response.json();
+}
+
+async function fetchRemoteUsers() {
+  const result = await apiGet("dashboard");
+  return result.users || [];
+}
+
+async function fetchRemoteRanking() {
+  const result = await apiGet("dashboard");
+  return result.ranking || [];
+}
+
+function createDefaultStats() {
+  return {
+    bestScore: 0,
+    bestPhase: 0,
+    lastPhase: 0,
+    lastDate: "-",
+    errorsByPhase: {}
+  };
+}
+
+function getUsersLocal() {
+  try {
+    const users = JSON.parse(localStorage.getItem(USERS_KEY)) || [];
+    return users.map((user) => ({
+      ...user,
+      stats: {
+        ...createDefaultStats(),
+        ...(user.stats || {})
+      }
+    }));
+  } catch (error) {
+    return [];
+  }
+}
+
+function saveUsersLocal(users) {
+  localStorage.setItem(USERS_KEY, JSON.stringify(users));
+}
+
+function getRankingLocal() {
+  try {
+    return JSON.parse(localStorage.getItem(RANKING_KEY)) || [];
+  } catch (error) {
+    return [];
+  }
+}
+
 function setAuthMode(registerMode) {
   isRegisterMode = registerMode;
   authForm.classList.toggle("hidden", registerMode);
@@ -122,10 +190,7 @@ function setAuthMode(registerMode) {
     : "Preencha apelido e senha para entrar.";
 }
 
-/**
- * Valida o formulário de acesso e autentica um usuário cadastrado localmente.
- */
-function handleLogin(event) {
+async function handleLogin(event) {
   event.preventDefault();
 
   const nickname = nicknameInput.value.trim();
@@ -146,33 +211,41 @@ function handleLogin(event) {
     passwordInput.value = "";
     authMessage.textContent = "Acesso mestre liberado.";
     updateUserInterface();
-    renderMasterDashboard();
+    await renderMasterDashboard();
     return;
   }
 
-  const registeredUsers = getUsers();
-  const foundUser = registeredUsers.find((user) => user.nickname === nickname);
+  let foundUser = null;
 
-  if (!foundUser || foundUser.password !== password) {
-    authMessage.textContent = "Apelido ou senha incorretos.";
-    return;
+  if (isRemoteBackendEnabled()) {
+    const result = await apiPost("login", { nickname, password });
+    if (!result.ok) {
+      authMessage.textContent = result.error || "Apelido ou senha incorretos.";
+      return;
+    }
+    foundUser = result.user;
+  } else {
+    const registeredUsers = getUsersLocal();
+    const localUser = registeredUsers.find((user) => user.nickname === nickname);
+    if (!localUser || localUser.password !== password) {
+      authMessage.textContent = "Apelido ou senha incorretos.";
+      return;
+    }
+    foundUser = {
+      username: localUser.username,
+      nickname: localUser.nickname,
+      role: "player"
+    };
   }
 
-  currentUser = {
-    username: foundUser.username,
-    nickname: foundUser.nickname,
-    role: "player"
-  };
+  currentUser = foundUser;
   localStorage.setItem(AUTH_KEY, JSON.stringify(currentUser));
   passwordInput.value = "";
   authMessage.textContent = "Acesso liberado. Bom treino.";
   updateUserInterface();
 }
 
-/**
- * Cadastra um novo usuário local no navegador para ser usado no login.
- */
-function handleRegister(event) {
+async function handleRegister(event) {
   event.preventDefault();
 
   const username = registerNameInput.value.trim();
@@ -184,21 +257,27 @@ function handleRegister(event) {
     return;
   }
 
-  const users = getUsers();
-  const nicknameExists = users.some((user) => user.nickname.toLowerCase() === nickname.toLowerCase());
-
-  if (nicknameExists) {
-    authMessage.textContent = "Esse apelido ja esta em uso. Escolha outro.";
-    return;
+  if (isRemoteBackendEnabled()) {
+    const result = await apiPost("register", { username, nickname, password });
+    if (!result.ok) {
+      authMessage.textContent = result.error || "Nao foi possivel cadastrar.";
+      return;
+    }
+  } else {
+    const users = getUsersLocal();
+    const nicknameExists = users.some((user) => user.nickname.toLowerCase() === nickname.toLowerCase());
+    if (nicknameExists) {
+      authMessage.textContent = "Esse apelido ja esta em uso. Escolha outro.";
+      return;
+    }
+    users.push({
+      username,
+      nickname,
+      password,
+      stats: createDefaultStats()
+    });
+    saveUsersLocal(users);
   }
-
-  users.push({
-    username,
-    nickname,
-    password,
-    stats: createDefaultStats()
-  });
-  saveUsers(users);
 
   nicknameInput.value = nickname;
   passwordInput.value = password;
@@ -207,9 +286,6 @@ function handleRegister(event) {
   authMessage.textContent = "Cadastro realizado. Clique em voltar para fazer login.";
 }
 
-/**
- * Restaura a sessão salva no navegador para evitar novo login a cada acesso.
- */
 function restoreUserSession() {
   try {
     currentUser = JSON.parse(localStorage.getItem(AUTH_KEY)) || null;
@@ -219,51 +295,10 @@ function restoreUserSession() {
 
   updateUserInterface();
   if (currentUser?.role === "master") {
-    renderMasterDashboard();
+    void renderMasterDashboard();
   }
 }
 
-/**
- * Lê a base local de usuários cadastrados no navegador.
- */
-function getUsers() {
-  try {
-    const users = JSON.parse(localStorage.getItem(USERS_KEY)) || [];
-    return users.map((user) => ({
-      ...user,
-      stats: {
-        ...createDefaultStats(),
-        ...(user.stats || {})
-      }
-    }));
-  } catch (error) {
-    return [];
-  }
-}
-
-/**
- * Salva a base local de usuários já normalizada.
- */
-function saveUsers(users) {
-  localStorage.setItem(USERS_KEY, JSON.stringify(users));
-}
-
-/**
- * Estrutura inicial de estatísticas usada por cada jogador cadastrado.
- */
-function createDefaultStats() {
-  return {
-    bestScore: 0,
-    bestPhase: 0,
-    lastPhase: 0,
-    lastDate: "-",
-    errorsByPhase: {}
-  };
-}
-
-/**
- * Mostra ou esconde a área de login conforme o estado atual do usuário.
- */
 function updateUserInterface() {
   const isAuthenticated = Boolean(currentUser && currentUser.nickname);
   const isMaster = currentUser?.role === "master";
@@ -275,9 +310,6 @@ function updateUserInterface() {
   welcomeChip.textContent = isAuthenticated ? `Jogador: ${currentUser.nickname}` : "Modo absoluto";
 }
 
-/**
- * Limpa a sessão local do usuário e volta para a tela de login.
- */
 function logout() {
   stopTimer();
   localStorage.removeItem(AUTH_KEY);
@@ -297,9 +329,6 @@ function logout() {
   updateUserInterface();
 }
 
-/**
- * Inicia um novo jogo, prepara o contexto de áudio e abre a primeira fase.
- */
 async function startGame() {
   if (!currentUser || currentUser.role === "master") {
     authMessage.textContent = "Faça login com apelido e senha antes de iniciar.";
@@ -318,15 +347,12 @@ async function startGame() {
   currentPhase = 1;
   currentScore = 0;
   streak = 0;
-  updateCurrentUserProgress();
+  void updateCurrentUserProgress();
   startPhase();
 }
 
-/**
- * Reinicia todos os estados principais do jogo e retorna para a fase inicial.
- */
 function resetGame() {
-  saveRanking(currentScore);
+  void saveRanking(currentScore);
   stopTimer();
   currentPhase = 1;
   currentScore = 0;
@@ -346,17 +372,11 @@ function resetGame() {
   updateDashboard();
 }
 
-/**
- * Avança o usuário para a próxima fase e prepara uma nova pergunta.
- */
 function nextPhase() {
   currentPhase += 1;
   startPhase();
 }
 
-/**
- * Configura os estados temporários da fase e dispara a geração da rodada.
- */
 function startPhase() {
   stopTimer();
   attemptsLeft = MAX_ATTEMPTS;
@@ -364,7 +384,7 @@ function startPhase() {
   selectedAnswer = [];
   isRoundLocked = true;
   clearFeedbackActions();
-  updateCurrentUserProgress();
+  void updateCurrentUserProgress();
   updateDashboard();
   generateQuestion();
   renderAnswerSlots();
@@ -372,9 +392,6 @@ function startPhase() {
   playNoteSequence(true);
 }
 
-/**
- * Cria a pergunta da fase atual, definindo a sequência correta e as opções exibidas.
- */
 function generateQuestion() {
   const notesInSequence = getNotesPerPhase(currentPhase);
   const answer = Array.from({ length: notesInSequence }, () => {
@@ -396,9 +413,6 @@ function generateQuestion() {
   renderChoices();
 }
 
-/**
- * Embaralha um array com o algoritmo de Fisher-Yates e devolve uma nova cópia.
- */
 function shuffleArray(items) {
   const array = [...items];
 
@@ -410,9 +424,6 @@ function shuffleArray(items) {
   return array;
 }
 
-/**
- * Gera o som de uma única nota usando Web Audio API com envelope simples.
- */
 function playNote(frequency) {
   return new Promise((resolve) => {
     const oscillator = audioContext.createOscillator();
@@ -440,9 +451,6 @@ function playNote(frequency) {
   });
 }
 
-/**
- * Toca a sequência inteira da fase com pausas entre as notas e controla a UI durante a reprodução.
- */
 function playNoteSequence(updateInstruction = false) {
   if (!currentQuestion || isPlayingSequence) return;
 
@@ -478,12 +486,9 @@ function playNoteSequence(updateInstruction = false) {
     setFeedback("Responda antes do cronômetro zerar.", "");
   };
 
-  runSequence();
+  void runSequence();
 }
 
-/**
- * Verifica a resposta montada pelo usuário, atualiza tentativas e define o estado da rodada.
- */
 function checkAnswer() {
   if (!currentQuestion || isRoundLocked) return;
 
@@ -496,7 +501,7 @@ function checkAnswer() {
   }
 
   attemptsLeft -= 1;
-  registerPhaseError(currentPhase);
+  void registerPhaseError(currentPhase);
   updateDashboard();
 
   if (attemptsLeft <= 0) {
@@ -509,9 +514,6 @@ function checkAnswer() {
   setFeedback(`Resposta incorreta. Você ainda tem ${attemptsLeft} tentativa(s).`, "error");
 }
 
-/**
- * Inicia o cronômetro regressivo da rodada e trata o estouro de tempo.
- */
 function startTimer() {
   timerDisplay.textContent = `${timeLeft}s`;
 
@@ -521,15 +523,12 @@ function startTimer() {
 
     if (timeLeft <= 0) {
       stopTimer();
-      registerPhaseError(currentPhase);
+      void registerPhaseError(currentPhase);
       handleFailedPhase("Tempo esgotado");
     }
   }, 1000);
 }
 
-/**
- * Interrompe o cronômetro quando a fase termina ou é reiniciada.
- */
 function stopTimer() {
   if (timerId) {
     clearInterval(timerId);
@@ -537,9 +536,6 @@ function stopTimer() {
   }
 }
 
-/**
- * Desenha os botões de notas disponíveis e conecta cada botão à montagem da resposta.
- */
 function renderChoices() {
   choicesContainer.innerHTML = "";
 
@@ -554,9 +550,6 @@ function renderChoices() {
   });
 }
 
-/**
- * Atualiza os espaços visuais que mostram a sequência escolhida pelo usuário.
- */
 function renderAnswerSlots() {
   answerSlots.innerHTML = "";
   const totalSlots = currentQuestion ? currentQuestion.notesInSequence : 3;
@@ -576,9 +569,6 @@ function renderAnswerSlots() {
   }
 }
 
-/**
- * Trata o clique em uma nota, completando a resposta e disparando a validação ao atingir o tamanho esperado.
- */
 function handleChoiceSelection(label) {
   if (isRoundLocked || isPlayingSequence || !currentQuestion) return;
   if (selectedAnswer.length >= currentQuestion.notesInSequence) return;
@@ -592,16 +582,13 @@ function handleChoiceSelection(label) {
   }
 }
 
-/**
- * Processa um acerto, aplica pontuação, animação e libera o avanço de fase.
- */
 function handleCorrectAnswer() {
   stopTimer();
   isRoundLocked = true;
   setControlsEnabled(false);
   currentScore += 100 + timeLeft * 2 + streak * 10;
   streak += 1;
-  updateCurrentUserProgress();
+  void updateCurrentUserProgress();
   updateDashboard();
   noteRibbon.textContent = "Sequência correta";
   setFeedback("Correto!", "success");
@@ -611,17 +598,14 @@ function handleCorrectAnswer() {
   appendActionButton("Próxima fase", nextPhase, "action-button");
 }
 
-/**
- * Processa falha por erro ou tempo esgotado, revela a resposta e oferece repetição da fase.
- */
 function handleFailedPhase(reason) {
   stopTimer();
   isRoundLocked = true;
   setControlsEnabled(false);
   streak = 0;
-  updateCurrentUserProgress();
+  void updateCurrentUserProgress();
   updateDashboard();
-  saveRanking(currentScore);
+  void saveRanking(currentScore);
   const answerText = currentQuestion.answer.join(" - ");
   noteRibbon.textContent = `Resposta: ${answerText}`;
   setFeedback(`${reason}. Resposta correta: ${answerText}.`, reason === "Tempo esgotado" ? "warning" : "error");
@@ -631,9 +615,6 @@ function handleFailedPhase(reason) {
   flashGameCard("error-flash");
 }
 
-/**
- * Atualiza textos e indicadores visuais do cabeçalho e dos cartões de status.
- */
 function updateDashboard() {
   phaseLabel.textContent = `Fase ${currentPhase}`;
   attemptsDisplay.textContent = `${attemptsLeft} tentativa${attemptsLeft === 1 ? "" : "s"}`;
@@ -646,9 +627,6 @@ function updateDashboard() {
   progressFill.style.width = `${Math.min((currentPhase / MAX_PHASE_REFERENCE) * 100, 100)}%`;
 }
 
-/**
- * Ativa ou desativa os botões principais de interação conforme o estado da rodada.
- */
 function setControlsEnabled(enabled) {
   const noteButtons = choicesContainer.querySelectorAll(".note-button");
   noteButtons.forEach((button) => {
@@ -659,9 +637,6 @@ function setControlsEnabled(enabled) {
   clearButton.disabled = !enabled;
 }
 
-/**
- * Atualiza a caixa de feedback central com cor contextual.
- */
 function setFeedback(message, tone) {
   feedbackMessage.textContent = message;
   feedbackMessage.className = "feedback-message";
@@ -682,16 +657,10 @@ function setFeedback(message, tone) {
   }
 }
 
-/**
- * Remove todos os botões de ação temporários exibidos no feedback.
- */
 function clearFeedbackActions() {
   feedbackActions.innerHTML = "";
 }
 
-/**
- * Adiciona um botão de ação contextual na área de feedback.
- */
 function appendActionButton(label, handler, className) {
   const button = document.createElement("button");
   button.type = "button";
@@ -701,44 +670,29 @@ function appendActionButton(label, handler, className) {
   feedbackActions.appendChild(button);
 }
 
-/**
- * Alterna a animação das ondas sonoras durante a reprodução do áudio.
- */
 function setVisualizer(active) {
   visualizer.classList.toggle("active", active);
   audioStage.classList.toggle("playing", active);
 }
 
-/**
- * Determina quantas notas devem ser tocadas de acordo com a fase atual.
- */
 function getNotesPerPhase(phase) {
   if (phase <= 5) return 1;
   if (phase <= 10) return 2;
   return 3;
 }
 
-/**
- * Cria uma pequena pausa assíncrona entre as notas da sequência.
- */
 function wait(duration) {
   return new Promise((resolve) => {
     setTimeout(resolve, duration);
   });
 }
 
-/**
- * Aplica uma animação curta no card principal para reforçar visualmente um acerto.
- */
 function flashGameCard(effectClass = "result-flash") {
   gameCard.classList.remove("result-flash", "success-flash", "error-flash");
   void gameCard.offsetWidth;
   gameCard.classList.add(effectClass);
 }
 
-/**
- * Aplica uma animação curta no botão escolhido pelo usuário durante a montagem da resposta.
- */
 function pulseChoiceButton(label) {
   const button = Array.from(choicesContainer.querySelectorAll(".note-button"))
     .find((element) => element.textContent.trim() === label);
@@ -750,9 +704,6 @@ function pulseChoiceButton(label) {
   button.classList.add("just-played");
 }
 
-/**
- * Marca visualmente as opções exibidas após acerto ou erro.
- */
 function highlightAnswerButtons(className) {
   const noteButtons = choicesContainer.querySelectorAll(".note-button");
   noteButtons.forEach((button) => {
@@ -769,21 +720,23 @@ function highlightAnswerButtons(className) {
   });
 }
 
-/**
- * Persiste a pontuação da sessão no ranking local, mantendo apenas os melhores registros.
- */
-function saveRanking(score) {
-  if (!score || !currentUser?.nickname) {
-    renderRanking();
+async function saveRanking(score) {
+  if (isRemoteBackendEnabled()) {
+    await saveRankingRemote(score);
     return;
   }
 
-  const ranking = getRanking();
+  if (!score || !currentUser?.nickname) {
+    await renderRanking();
+    return;
+  }
+
+  const ranking = getRankingLocal();
   const normalizedNickname = currentUser.nickname.trim();
   const existingEntry = ranking.find((entry) => entry.nickname === normalizedNickname);
 
   if (existingEntry && existingEntry.score >= score) {
-    renderRanking();
+    await renderRanking();
     return;
   }
 
@@ -796,30 +749,36 @@ function saveRanking(score) {
 
   const nextRanking = ranking.filter((entry) => entry.nickname !== normalizedNickname);
   nextRanking.push(nextEntry);
-
   nextRanking.sort((left, right) => right.score - left.score);
   localStorage.setItem(RANKING_KEY, JSON.stringify(nextRanking.slice(0, 10)));
-  updateCurrentUserProgress(score, currentPhase, true);
-  renderRanking();
-  renderMasterDashboard();
+
+  await updateCurrentUserProgress(score, currentPhase, true);
+  await renderRanking();
+  await renderMasterDashboard();
 }
 
-/**
- * Lê o ranking salvo no LocalStorage e retorna uma lista segura.
- */
-function getRanking() {
-  try {
-    return JSON.parse(localStorage.getItem(RANKING_KEY)) || [];
-  } catch (error) {
-    return [];
+async function saveRankingRemote(score) {
+  if (!score || !currentUser?.nickname || currentUser.role === "master") {
+    await renderRanking();
+    return;
   }
+
+  await apiPost("save_score", {
+    nickname: currentUser.nickname,
+    score,
+    phase: currentPhase
+  });
+
+  await updateCurrentUserProgress(score, currentPhase, true);
+  await renderRanking();
+  await renderMasterDashboard();
 }
 
-/**
- * Renderiza a lista de melhores pontuações na lateral da interface.
- */
-function renderRanking() {
-  const ranking = getRanking();
+async function renderRanking() {
+  const ranking = isRemoteBackendEnabled()
+    ? await fetchRemoteRanking()
+    : getRankingLocal();
+
   rankingList.innerHTML = "";
 
   if (!ranking.length) {
@@ -850,13 +809,21 @@ function renderRanking() {
   });
 }
 
-/**
- * Atualiza as estatísticas persistidas do jogador logado.
- */
-function updateCurrentUserProgress(score = currentScore, phase = currentPhase, bestCheck = false) {
+async function updateCurrentUserProgress(score = currentScore, phase = currentPhase, bestCheck = false) {
   if (!currentUser || currentUser.role === "master") return;
 
-  const users = getUsers();
+  if (isRemoteBackendEnabled()) {
+    await apiPost("sync_progress", {
+      nickname: currentUser.nickname,
+      score,
+      phase,
+      bestCheck
+    });
+    await renderMasterDashboard();
+    return;
+  }
+
+  const users = getUsersLocal();
   const userIndex = users.findIndex((user) => user.nickname === currentUser.nickname);
   if (userIndex === -1) return;
 
@@ -865,28 +832,37 @@ function updateCurrentUserProgress(score = currentScore, phase = currentPhase, b
     ...createDefaultStats(),
     ...user.stats
   };
+  const previousBest = Number(stats.bestScore || 0);
 
   stats.lastPhase = phase;
   stats.lastDate = new Date().toLocaleDateString("pt-BR");
 
-  if (bestCheck || score > stats.bestScore) {
-    stats.bestScore = Math.max(stats.bestScore, score);
-    stats.bestPhase = score >= stats.bestScore ? phase : stats.bestPhase;
+  if (bestCheck || score > previousBest) {
+    stats.bestScore = Math.max(previousBest, score);
+    if (score > previousBest) {
+      stats.bestPhase = phase;
+    }
   }
 
   user.stats = stats;
   users[userIndex] = user;
-  saveUsers(users);
-  renderMasterDashboard();
+  saveUsersLocal(users);
+  await renderMasterDashboard();
 }
 
-/**
- * Registra um erro na fase atual para o jogador logado.
- */
-function registerPhaseError(phase) {
+async function registerPhaseError(phase) {
   if (!currentUser || currentUser.role === "master") return;
 
-  const users = getUsers();
+  if (isRemoteBackendEnabled()) {
+    await apiPost("increment_error", {
+      nickname: currentUser.nickname,
+      phase
+    });
+    await renderMasterDashboard();
+    return;
+  }
+
+  const users = getUsersLocal();
   const userIndex = users.findIndex((user) => user.nickname === currentUser.nickname);
   if (userIndex === -1) return;
 
@@ -895,28 +871,30 @@ function registerPhaseError(phase) {
     ...createDefaultStats(),
     ...user.stats
   };
-
   const key = String(phase);
+
   stats.errorsByPhase[key] = (stats.errorsByPhase[key] || 0) + 1;
   stats.lastPhase = phase;
   stats.lastDate = new Date().toLocaleDateString("pt-BR");
+
   user.stats = stats;
   users[userIndex] = user;
-  saveUsers(users);
-  renderMasterDashboard();
+  saveUsersLocal(users);
+  await renderMasterDashboard();
 }
 
-/**
- * Renderiza a tela master com ranking e indicadores de todos os usuários cadastrados.
- */
-function renderMasterDashboard() {
+async function renderMasterDashboard() {
   if (!masterTableBody) return;
 
-  const users = getUsers();
-  const ranking = getRanking();
+  const users = isRemoteBackendEnabled()
+    ? await fetchRemoteUsers()
+    : getUsersLocal();
+  const ranking = isRemoteBackendEnabled()
+    ? await fetchRemoteRanking()
+    : getRankingLocal();
+
   const rankingMap = new Map(ranking.map((entry, index) => [entry.nickname, index + 1]));
   masterTableBody.innerHTML = "";
-
   masterUsersCount.textContent = `${users.length} usuario${users.length === 1 ? "" : "s"}`;
   masterTopScore.textContent = `${ranking[0]?.score || 0} pts`;
 
@@ -932,8 +910,8 @@ function renderMasterDashboard() {
   }
 
   const sortedUsers = [...users].sort((left, right) => {
-    const leftScore = left.stats?.bestScore || 0;
-    const rightScore = right.stats?.bestScore || 0;
+    const leftScore = Number(left.stats?.bestScore || left.bestScore || 0);
+    const rightScore = Number(right.stats?.bestScore || right.bestScore || 0);
     return rightScore - leftScore || left.nickname.localeCompare(right.nickname);
   });
 
@@ -941,7 +919,13 @@ function renderMasterDashboard() {
     const row = document.createElement("tr");
     const stats = {
       ...createDefaultStats(),
-      ...(user.stats || {})
+      ...(user.stats || {
+        bestScore: Number(user.bestScore || 0),
+        bestPhase: Number(user.bestPhase || 0),
+        lastPhase: Number(user.lastPhase || 0),
+        lastDate: user.lastDate || "-",
+        errorsByPhase: user.errorsByPhase || {}
+      })
     };
     const rankingPosition = rankingMap.get(user.nickname);
     const errorEntries = Object.entries(stats.errorsByPhase || {});
