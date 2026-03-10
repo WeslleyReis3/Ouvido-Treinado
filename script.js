@@ -978,8 +978,10 @@ async function renderMasterDashboard() {
   }
 
   const sortedUsers = [...users].sort((left, right) => {
-    const leftScore = Number(left.stats?.bestScore || left.bestScore || 0);
-    const rightScore = Number(right.stats?.bestScore || right.bestScore || 0);
+    const leftRankingScore = ranking.find((entry) => entry.nickname === left.nickname)?.score || 0;
+    const rightRankingScore = ranking.find((entry) => entry.nickname === right.nickname)?.score || 0;
+    const leftScore = Number(leftRankingScore || left.stats?.bestScore || left.bestScore || 0);
+    const rightScore = Number(rightRankingScore || right.stats?.bestScore || right.bestScore || 0);
     return rightScore - leftScore || left.nickname.localeCompare(right.nickname);
   });
 
@@ -995,6 +997,7 @@ async function renderMasterDashboard() {
         errorsByPhase: user.errorsByPhase || {}
       })
     };
+    const rankingEntry = ranking.find((entry) => entry.nickname === user.nickname);
     const rankingPosition = rankingMap.get(user.nickname);
     const errorEntries = Object.entries(stats.errorsByPhase || {});
     const errorText = errorEntries.length
@@ -1008,9 +1011,9 @@ async function renderMasterDashboard() {
       <td>${rankingPosition ? `${rankingPosition}º lugar` : "-"}</td>
       <td>${user.username || "-"}</td>
       <td>${user.nickname}</td>
-      <td>${stats.bestScore || 0} pts</td>
-      <td>${stats.bestPhase || stats.lastPhase || 0}</td>
-      <td>${formatDisplayDate(stats.lastDate || "-")}</td>
+      <td>${rankingEntry?.score || 0} pts</td>
+      <td>${rankingEntry?.phase || stats.bestPhase || stats.lastPhase || 0}</td>
+      <td>${formatDisplayDate(rankingEntry?.date || stats.lastDate || "-")}</td>
       <td class="phase-errors">${errorText}</td>
     `;
 
