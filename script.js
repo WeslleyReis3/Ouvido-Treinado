@@ -14,6 +14,7 @@ const NOTE_DURATION = 2000;
 const NOTE_GAP = 800;
 const MAX_ATTEMPTS = 2;
 const RANKING_KEY = "ouvido-treinado-ranking";
+const AUTH_KEY = "ouvido-treinado-user";
 
 let audioContext;
 let currentPhase = 1;
@@ -26,13 +27,21 @@ let isPlayingSequence = false;
 let isRoundLocked = false;
 let currentQuestion = null;
 let selectedAnswer = [];
+let currentUser = null;
 
+const authScreen = document.getElementById("authScreen");
+const authForm = document.getElementById("authForm");
+const nicknameInput = document.getElementById("nicknameInput");
+const passwordInput = document.getElementById("passwordInput");
+const authMessage = document.getElementById("authMessage");
 const startScreen = document.getElementById("startScreen");
 const gameScreen = document.getElementById("gameScreen");
 const startButton = document.getElementById("startButton");
 const resetGameButton = document.getElementById("resetGameButton");
+const logoutButton = document.getElementById("logoutButton");
 const replayButton = document.getElementById("replayButton");
 const clearButton = document.getElementById("clearButton");
+const welcomeChip = document.getElementById("welcomeChip");
 const phaseLabel = document.getElementById("phaseLabel");
 const timerDisplay = document.getElementById("timerDisplay");
 const attemptsDisplay = document.getElementById("attemptsDisplay");
@@ -54,8 +63,10 @@ const gameCard = document.getElementById("gameScreen");
 const noteRibbon = document.getElementById("noteRibbon");
 const audioStage = document.querySelector(".audio-stage");
 
+authForm.addEventListener("submit", handleLogin);
 startButton.addEventListener("click", startGame);
 resetGameButton.addEventListener("click", resetGame);
+logoutButton.addEventListener("click", logout);
 replayButton.addEventListener("click", () => playNoteSequence(false));
 clearButton.addEventListener("click", () => {
   if (isRoundLocked || isPlayingSequence) return;
@@ -65,12 +76,83 @@ clearButton.addEventListener("click", () => {
 });
 
 renderRanking();
+restoreUserSession();
 updateDashboard();
+
+/**
+ * Valida o formulário de acesso e salva localmente o apelido informado.
+ */
+function handleLogin(event) {
+  event.preventDefault();
+
+  const nickname = nicknameInput.value.trim();
+  const password = passwordInput.value.trim();
+
+  if (!nickname || !password) {
+    authMessage.textContent = "Informe um apelido e uma senha para continuar.";
+    return;
+  }
+
+  currentUser = { nickname };
+  localStorage.setItem(AUTH_KEY, JSON.stringify(currentUser));
+  passwordInput.value = "";
+  authMessage.textContent = "Acesso liberado. Bom treino.";
+  updateUserInterface();
+}
+
+/**
+ * Restaura a sessão salva no navegador para evitar novo login a cada acesso.
+ */
+function restoreUserSession() {
+  try {
+    currentUser = JSON.parse(localStorage.getItem(AUTH_KEY)) || null;
+  } catch (error) {
+    currentUser = null;
+  }
+
+  updateUserInterface();
+}
+
+/**
+ * Mostra ou esconde a área de login conforme o estado atual do usuário.
+ */
+function updateUserInterface() {
+  const isAuthenticated = Boolean(currentUser && currentUser.nickname);
+
+  authScreen.classList.toggle("hidden", isAuthenticated);
+  startScreen.classList.toggle("hidden", !isAuthenticated || !gameScreen.classList.contains("hidden"));
+  welcomeChip.textContent = isAuthenticated ? `Jogador: ${currentUser.nickname}` : "Modo absoluto";
+}
+
+/**
+ * Limpa a sessão local do usuário e volta para a tela de login.
+ */
+function logout() {
+  stopTimer();
+  localStorage.removeItem(AUTH_KEY);
+  currentUser = null;
+  currentQuestion = null;
+  selectedAnswer = [];
+  isRoundLocked = false;
+  isPlayingSequence = false;
+  startScreen.classList.add("hidden");
+  gameScreen.classList.add("hidden");
+  authMessage.textContent = "Sessão encerrada. Entre novamente para continuar.";
+  nicknameInput.value = "";
+  passwordInput.value = "";
+  updateUserInterface();
+}
 
 /**
  * Inicia um novo jogo, prepara o contexto de áudio e abre a primeira fase.
  */
 async function startGame() {
+  if (!currentUser) {
+    authMessage.textContent = "Faça login com apelido e senha antes de iniciar.";
+    updateUserInterface();
+    return;
+  }
+
   if (!audioContext) {
     audioContext = new (window.AudioContext || window.webkitAudioContext)();
   }
@@ -105,6 +187,7 @@ function resetGame() {
   gameScreen.classList.add("hidden");
   clearFeedbackActions();
   setFeedback("Escute a sequência para começar.", "");
+  updateUserInterface();
   updateDashboard();
 }
 

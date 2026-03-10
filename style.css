@@ -101,6 +101,11 @@ button {
   animation: rise-in 600ms ease;
 }
 
+.auth-card {
+  max-width: 720px;
+  margin: 0 auto;
+}
+
 .hero-copy h1,
 .ranking-header h2,
 .topbar h2 {
@@ -292,10 +297,57 @@ button {
 
 .topbar-stats,
 .answer-actions,
-.feedback-actions {
+.feedback-actions,
+.ranking-actions {
   display: flex;
   gap: 12px;
   flex-wrap: wrap;
+}
+
+.auth-form {
+  display: grid;
+  gap: 16px;
+}
+
+.auth-field {
+  display: grid;
+  gap: 10px;
+}
+
+.auth-field span,
+.auth-message {
+  color: var(--muted);
+}
+
+.auth-field input {
+  width: 100%;
+  min-height: 56px;
+  padding: 14px 16px;
+  border-radius: 16px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  background: rgba(255, 255, 255, 0.05);
+  color: var(--text);
+  font: inherit;
+  outline: none;
+  transition: border-color 180ms ease, box-shadow 180ms ease, background 180ms ease;
+}
+
+.auth-field input::placeholder {
+  color: rgba(244, 247, 251, 0.38);
+}
+
+.auth-field input:focus {
+  border-color: rgba(54, 211, 255, 0.4);
+  box-shadow: 0 0 0 3px rgba(54, 211, 255, 0.12);
+  background: rgba(255, 255, 255, 0.07);
+}
+
+.auth-button {
+  width: min(100%, 320px);
+}
+
+.auth-message {
+  margin: 0;
 }
 
 .pill {
@@ -786,7 +838,8 @@ button {
 
   .topbar-stats,
   .answer-actions,
-  .feedback-actions {
+  .feedback-actions,
+  .ranking-actions {
     width: 100%;
     justify-content: center;
   }
@@ -954,7 +1007,8 @@ button {
 
   .topbar-stats,
   .answer-actions,
-  .feedback-actions {
+  .feedback-actions,
+  .ranking-actions {
     gap: 10px;
   }
 

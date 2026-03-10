@@ -10,13 +10,47 @@
   <div class="bg-orb bg-orb-left" aria-hidden="true"></div>
   <div class="bg-orb bg-orb-right" aria-hidden="true"></div>
   <main class="app-shell">
+    <section class="hero-card auth-card" id="authScreen">
+      <div class="hero-topline">
+        <div class="brand-badge">
+          <span class="brand-icon">♫</span>
+          <span>Acesso ao treino</span>
+        </div>
+        <div class="hero-chip">Login local</div>
+      </div>
+
+      <div class="hero-copy">
+        <p class="eyebrow">Entre para começar</p>
+        <h1>Use um apelido e qualquer senha</h1>
+        <p class="hero-text">
+          O apelido identifica o jogador no dispositivo. A senha pode ser qualquer valor, basta preencher para liberar o treino.
+        </p>
+      </div>
+
+      <form class="auth-form" id="authForm">
+        <label class="auth-field">
+          <span>Apelido</span>
+          <input id="nicknameInput" name="nickname" type="text" maxlength="24" placeholder="Ex.: Maestro99" required>
+        </label>
+
+        <label class="auth-field">
+          <span>Senha</span>
+          <input id="passwordInput" name="password" type="password" placeholder="Digite qualquer senha" required>
+        </label>
+
+        <button class="primary-button auth-button" type="submit">Entrar</button>
+      </form>
+
+      <p class="auth-message" id="authMessage">Preencha os dois campos para liberar o treino.</p>
+    </section>
+
     <section class="hero-card" id="startScreen">
       <div class="hero-topline">
         <div class="brand-badge">
           <span class="brand-icon">♪</span>
           <span>Ear Training Studio</span>
         </div>
-        <div class="hero-chip">Modo absoluto</div>
+        <div class="hero-chip" id="welcomeChip">Modo absoluto</div>
       </div>
 
       <div class="hero-copy">
@@ -138,7 +172,10 @@
           <p class="eyebrow">Ranking local</p>
           <h2>Melhores resultados</h2>
         </div>
-        <button class="ghost-button" id="resetGameButton" type="button">Reiniciar jogo</button>
+        <div class="ranking-actions">
+          <button class="ghost-button" id="resetGameButton" type="button">Reiniciar jogo</button>
+          <button class="ghost-button" id="logoutButton" type="button">Sair</button>
+        </div>
       </div>
       <ol id="rankingList" class="ranking-list"></ol>
     </aside>
