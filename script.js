@@ -118,14 +118,28 @@ async function apiPost(action, payload = {}) {
     body: JSON.stringify({ action, ...payload })
   });
 
-  return response.json();
+  return parseApiResponse(response);
 }
 
 async function apiGet(action) {
   const url = new URL(APPS_SCRIPT_URL);
   url.searchParams.set("action", action);
   const response = await fetch(url.toString());
-  return response.json();
+  return parseApiResponse(response);
+}
+
+async function parseApiResponse(response) {
+  const text = await response.text();
+
+  try {
+    return JSON.parse(text);
+  } catch (error) {
+    return {
+      ok: false,
+      error: "O Apps Script retornou um erro inesperado.",
+      raw: text
+    };
+  }
 }
 
 async function fetchRemoteUsers() {
