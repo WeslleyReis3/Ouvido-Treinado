@@ -16,6 +16,8 @@ const MAX_ATTEMPTS = 2;
 const RANKING_KEY = "ouvido-treinado-ranking";
 const AUTH_KEY = "ouvido-treinado-user";
 const USERS_KEY = "ouvido-treinado-users";
+const MASTER_NICKNAME = "WREIS";
+const MASTER_PASSWORD = "@Qaz123*";
 
 let audioContext;
 let currentPhase = 1;
@@ -47,7 +49,9 @@ const authDescription = document.getElementById("authDescription");
 const openRegisterButton = document.getElementById("openRegisterButton");
 const backToLoginButton = document.getElementById("backToLoginButton");
 const startScreen = document.getElementById("startScreen");
+const masterScreen = document.getElementById("masterScreen");
 const gameScreen = document.getElementById("gameScreen");
+const masterLogoutButton = document.getElementById("masterLogoutButton");
 const startButton = document.getElementById("startButton");
 const resetGameButton = document.getElementById("resetGameButton");
 const logoutButton = document.getElementById("logoutButton");
@@ -69,7 +73,11 @@ const feedbackMessage = document.getElementById("feedbackMessage");
 const feedbackActions = document.getElementById("feedbackActions");
 const feedbackPanel = document.getElementById("feedbackPanel");
 const feedbackIcon = document.getElementById("feedbackIcon");
+const rankingCard = document.getElementById("rankingCard");
 const rankingList = document.getElementById("rankingList");
+const masterUsersCount = document.getElementById("masterUsersCount");
+const masterTopScore = document.getElementById("masterTopScore");
+const masterTableBody = document.getElementById("masterTableBody");
 const visualizer = document.getElementById("visualizer");
 const gameCard = document.getElementById("gameScreen");
 const noteRibbon = document.getElementById("noteRibbon");
@@ -82,6 +90,7 @@ backToLoginButton.addEventListener("click", () => setAuthMode(false));
 startButton.addEventListener("click", startGame);
 resetGameButton.addEventListener("click", resetGame);
 logoutButton.addEventListener("click", logout);
+masterLogoutButton.addEventListener("click", logout);
 replayButton.addEventListener("click", () => playNoteSequence(false));
 clearButton.addEventListener("click", () => {
   if (isRoundLocked || isPlayingSequence) return;
@@ -127,6 +136,20 @@ function handleLogin(event) {
     return;
   }
 
+  if (nickname === MASTER_NICKNAME && password === MASTER_PASSWORD) {
+    currentUser = {
+      username: "Master",
+      nickname: MASTER_NICKNAME,
+      role: "master"
+    };
+    localStorage.setItem(AUTH_KEY, JSON.stringify(currentUser));
+    passwordInput.value = "";
+    authMessage.textContent = "Acesso mestre liberado.";
+    updateUserInterface();
+    renderMasterDashboard();
+    return;
+  }
+
   const registeredUsers = getUsers();
   const foundUser = registeredUsers.find((user) => user.nickname === nickname);
 
@@ -137,7 +160,8 @@ function handleLogin(event) {
 
   currentUser = {
     username: foundUser.username,
-    nickname: foundUser.nickname
+    nickname: foundUser.nickname,
+    role: "player"
   };
   localStorage.setItem(AUTH_KEY, JSON.stringify(currentUser));
   passwordInput.value = "";
@@ -168,8 +192,13 @@ function handleRegister(event) {
     return;
   }
 
-  users.push({ username, nickname, password });
-  localStorage.setItem(USERS_KEY, JSON.stringify(users));
+  users.push({
+    username,
+    nickname,
+    password,
+    stats: createDefaultStats()
+  });
+  saveUsers(users);
 
   nicknameInput.value = nickname;
   passwordInput.value = password;
@@ -189,6 +218,9 @@ function restoreUserSession() {
   }
 
   updateUserInterface();
+  if (currentUser?.role === "master") {
+    renderMasterDashboard();
+  }
 }
 
 /**
@@ -196,10 +228,37 @@ function restoreUserSession() {
  */
 function getUsers() {
   try {
-    return JSON.parse(localStorage.getItem(USERS_KEY)) || [];
+    const users = JSON.parse(localStorage.getItem(USERS_KEY)) || [];
+    return users.map((user) => ({
+      ...user,
+      stats: {
+        ...createDefaultStats(),
+        ...(user.stats || {})
+      }
+    }));
   } catch (error) {
     return [];
   }
+}
+
+/**
+ * Salva a base local de usuários já normalizada.
+ */
+function saveUsers(users) {
+  localStorage.setItem(USERS_KEY, JSON.stringify(users));
+}
+
+/**
+ * Estrutura inicial de estatísticas usada por cada jogador cadastrado.
+ */
+function createDefaultStats() {
+  return {
+    bestScore: 0,
+    bestPhase: 0,
+    lastPhase: 0,
+    lastDate: "-",
+    errorsByPhase: {}
+  };
 }
 
 /**
@@ -207,9 +266,12 @@ function getUsers() {
  */
 function updateUserInterface() {
   const isAuthenticated = Boolean(currentUser && currentUser.nickname);
+  const isMaster = currentUser?.role === "master";
 
   authScreen.classList.toggle("hidden", isAuthenticated);
-  startScreen.classList.toggle("hidden", !isAuthenticated || !gameScreen.classList.contains("hidden"));
+  startScreen.classList.toggle("hidden", !isAuthenticated || !gameScreen.classList.contains("hidden") || isMaster);
+  masterScreen.classList.toggle("hidden", !isMaster);
+  rankingCard.classList.toggle("hidden", isMaster);
   welcomeChip.textContent = isAuthenticated ? `Jogador: ${currentUser.nickname}` : "Modo absoluto";
 }
 
@@ -225,6 +287,7 @@ function logout() {
   isRoundLocked = false;
   isPlayingSequence = false;
   startScreen.classList.add("hidden");
+  masterScreen.classList.add("hidden");
   gameScreen.classList.add("hidden");
   authMessage.textContent = "Sessão encerrada. Entre novamente para continuar.";
   nicknameInput.value = "";
@@ -238,7 +301,7 @@ function logout() {
  * Inicia um novo jogo, prepara o contexto de áudio e abre a primeira fase.
  */
 async function startGame() {
-  if (!currentUser) {
+  if (!currentUser || currentUser.role === "master") {
     authMessage.textContent = "Faça login com apelido e senha antes de iniciar.";
     updateUserInterface();
     return;
@@ -255,6 +318,7 @@ async function startGame() {
   currentPhase = 1;
   currentScore = 0;
   streak = 0;
+  updateCurrentUserProgress();
   startPhase();
 }
 
@@ -300,6 +364,7 @@ function startPhase() {
   selectedAnswer = [];
   isRoundLocked = true;
   clearFeedbackActions();
+  updateCurrentUserProgress();
   updateDashboard();
   generateQuestion();
   renderAnswerSlots();
@@ -431,6 +496,7 @@ function checkAnswer() {
   }
 
   attemptsLeft -= 1;
+  registerPhaseError(currentPhase);
   updateDashboard();
 
   if (attemptsLeft <= 0) {
@@ -455,6 +521,7 @@ function startTimer() {
 
     if (timeLeft <= 0) {
       stopTimer();
+      registerPhaseError(currentPhase);
       handleFailedPhase("Tempo esgotado");
     }
   }, 1000);
@@ -534,6 +601,7 @@ function handleCorrectAnswer() {
   setControlsEnabled(false);
   currentScore += 100 + timeLeft * 2 + streak * 10;
   streak += 1;
+  updateCurrentUserProgress();
   updateDashboard();
   noteRibbon.textContent = "Sequência correta";
   setFeedback("Correto!", "success");
@@ -551,6 +619,7 @@ function handleFailedPhase(reason) {
   isRoundLocked = true;
   setControlsEnabled(false);
   streak = 0;
+  updateCurrentUserProgress();
   updateDashboard();
   saveRanking(currentScore);
   const answerText = currentQuestion.answer.join(" - ");
@@ -730,7 +799,9 @@ function saveRanking(score) {
 
   nextRanking.sort((left, right) => right.score - left.score);
   localStorage.setItem(RANKING_KEY, JSON.stringify(nextRanking.slice(0, 10)));
+  updateCurrentUserProgress(score, currentPhase, true);
   renderRanking();
+  renderMasterDashboard();
 }
 
 /**
@@ -776,5 +847,121 @@ function renderRanking() {
 
     item.append(position, player, meta);
     rankingList.appendChild(item);
+  });
+}
+
+/**
+ * Atualiza as estatísticas persistidas do jogador logado.
+ */
+function updateCurrentUserProgress(score = currentScore, phase = currentPhase, bestCheck = false) {
+  if (!currentUser || currentUser.role === "master") return;
+
+  const users = getUsers();
+  const userIndex = users.findIndex((user) => user.nickname === currentUser.nickname);
+  if (userIndex === -1) return;
+
+  const user = users[userIndex];
+  const stats = {
+    ...createDefaultStats(),
+    ...user.stats
+  };
+
+  stats.lastPhase = phase;
+  stats.lastDate = new Date().toLocaleDateString("pt-BR");
+
+  if (bestCheck || score > stats.bestScore) {
+    stats.bestScore = Math.max(stats.bestScore, score);
+    stats.bestPhase = score >= stats.bestScore ? phase : stats.bestPhase;
+  }
+
+  user.stats = stats;
+  users[userIndex] = user;
+  saveUsers(users);
+  renderMasterDashboard();
+}
+
+/**
+ * Registra um erro na fase atual para o jogador logado.
+ */
+function registerPhaseError(phase) {
+  if (!currentUser || currentUser.role === "master") return;
+
+  const users = getUsers();
+  const userIndex = users.findIndex((user) => user.nickname === currentUser.nickname);
+  if (userIndex === -1) return;
+
+  const user = users[userIndex];
+  const stats = {
+    ...createDefaultStats(),
+    ...user.stats
+  };
+
+  const key = String(phase);
+  stats.errorsByPhase[key] = (stats.errorsByPhase[key] || 0) + 1;
+  stats.lastPhase = phase;
+  stats.lastDate = new Date().toLocaleDateString("pt-BR");
+  user.stats = stats;
+  users[userIndex] = user;
+  saveUsers(users);
+  renderMasterDashboard();
+}
+
+/**
+ * Renderiza a tela master com ranking e indicadores de todos os usuários cadastrados.
+ */
+function renderMasterDashboard() {
+  if (!masterTableBody) return;
+
+  const users = getUsers();
+  const ranking = getRanking();
+  const rankingMap = new Map(ranking.map((entry, index) => [entry.nickname, index + 1]));
+  masterTableBody.innerHTML = "";
+
+  masterUsersCount.textContent = `${users.length} usuario${users.length === 1 ? "" : "s"}`;
+  masterTopScore.textContent = `${ranking[0]?.score || 0} pts`;
+
+  if (!users.length) {
+    const row = document.createElement("tr");
+    const cell = document.createElement("td");
+    cell.colSpan = 7;
+    cell.className = "master-empty";
+    cell.textContent = "Nenhum usuario cadastrado ainda.";
+    row.appendChild(cell);
+    masterTableBody.appendChild(row);
+    return;
+  }
+
+  const sortedUsers = [...users].sort((left, right) => {
+    const leftScore = left.stats?.bestScore || 0;
+    const rightScore = right.stats?.bestScore || 0;
+    return rightScore - leftScore || left.nickname.localeCompare(right.nickname);
+  });
+
+  sortedUsers.forEach((user) => {
+    const row = document.createElement("tr");
+    const stats = {
+      ...createDefaultStats(),
+      ...(user.stats || {})
+    };
+    const rankingPosition = rankingMap.get(user.nickname);
+    const errorEntries = Object.entries(stats.errorsByPhase || {});
+    const errorText = errorEntries.length
+      ? errorEntries
+          .sort((left, right) => Number(left[0]) - Number(right[0]))
+          .map(([phase, count]) => `F${phase}: ${count}`)
+          .join(" | ")
+      : "Sem erros";
+
+    row.innerHTML = `
+      <td>${rankingPosition ? `${rankingPosition}º lugar` : "-"}</td>
+      <td>${user.username || "-"}</td>
+      <td>${user.nickname}</td>
+      <td>${stats.bestScore || 0} pts</td>
+      <td>${stats.bestPhase || stats.lastPhase || 0}</td>
+      <td>${stats.lastDate || "-"}</td>
+      <td class="phase-errors">${errorText}</td>
+    `;
+
+    masterTableBody.appendChild(row);
   });
 }

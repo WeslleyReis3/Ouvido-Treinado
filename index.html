@@ -114,6 +114,39 @@
       <button class="primary-button hero-button" id="startButton">Iniciar treino</button>
     </section>
 
+    <section class="game-card hidden" id="masterScreen">
+      <header class="topbar">
+        <div>
+          <p class="eyebrow">Painel mestre</p>
+          <h2>Visao geral dos jogadores</h2>
+        </div>
+        <div class="topbar-stats">
+          <div class="pill" id="masterUsersCount">0 usuarios</div>
+          <div class="pill" id="masterTopScore">0 pts</div>
+          <button class="ghost-button" id="masterLogoutButton" type="button">Sair</button>
+        </div>
+      </header>
+
+      <section class="master-panel">
+        <div class="master-table-wrapper">
+          <table class="master-table">
+            <thead>
+              <tr>
+                <th>Ranking</th>
+                <th>Usuario</th>
+                <th>Apelido</th>
+                <th>Pontuacao</th>
+                <th>Fase</th>
+                <th>Data</th>
+                <th>Erros por fase</th>
+              </tr>
+            </thead>
+            <tbody id="masterTableBody"></tbody>
+          </table>
+        </div>
+      </section>
+    </section>
+
     <section class="game-card hidden" id="gameScreen">
       <header class="topbar">
         <div>
@@ -194,7 +227,7 @@
       </section>
     </section>
 
-    <aside class="ranking-card">
+    <aside class="ranking-card" id="rankingCard">
       <div class="ranking-header">
         <div>
           <p class="eyebrow">Ranking local</p>
