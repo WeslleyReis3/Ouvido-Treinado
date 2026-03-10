@@ -193,7 +193,6 @@ function playNote(frequency) {
     oscillator.stop(audioContext.currentTime + NOTE_DURATION / 1000);
 
     setVisualizer(true);
-    highlightPlayedNote(frequency);
 
     setTimeout(() => {
       setVisualizer(false);
@@ -223,11 +222,11 @@ function playNoteSequence(updateInstruction = false) {
     for (let index = 0; index < currentQuestion.answer.length; index += 1) {
       const currentLabel = currentQuestion.answer[index];
       const currentNote = NOTES.find((note) => note.label === currentLabel);
-      noteRibbon.textContent = `Tocando: ${currentLabel}`;
+      noteRibbon.textContent = "Ouvindo...";
       await playNote(currentNote.frequency);
 
       if (index < currentQuestion.answer.length - 1) {
-        noteRibbon.textContent = "Próxima nota...";
+        noteRibbon.textContent = "Aguarde...";
         await wait(NOTE_GAP);
       }
     }
@@ -491,23 +490,6 @@ function flashGameCard(effectClass = "result-flash") {
   gameCard.classList.remove("result-flash", "success-flash", "error-flash");
   void gameCard.offsetWidth;
   gameCard.classList.add(effectClass);
-}
-
-/**
- * Destaca o botão da nota que acabou de ser reproduzida para reforçar o feedback auditivo.
- */
-function highlightPlayedNote(frequency) {
-  const note = NOTES.find((item) => item.frequency === frequency);
-  if (!note) return;
-
-  const button = Array.from(choicesContainer.querySelectorAll(".note-button"))
-    .find((element) => element.textContent.trim() === note.label);
-
-  if (!button) return;
-
-  button.classList.remove("just-played");
-  void button.offsetWidth;
-  button.classList.add("just-played");
 }
 
 /**
