@@ -351,8 +351,13 @@ function updateUserInterface() {
   resumePanel.classList.toggle("hidden", !(isAuthenticated && !isMaster && pendingResumeState));
 }
 
-function logout() {
+async function logout() {
   stopTimer();
+
+  if (currentUser?.role === "player" && currentScore > 0) {
+    await saveRanking(currentScore);
+  }
+
   localStorage.removeItem(AUTH_KEY);
   currentUser = null;
   pendingResumeState = null;
