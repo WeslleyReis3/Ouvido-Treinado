@@ -617,7 +617,7 @@ function handleCorrectAnswer() {
   stopTimer();
   isRoundLocked = true;
   setControlsEnabled(false);
-  currentScore += 100 + timeLeft * 2 + streak * 10;
+  currentScore += 100;
   streak += 1;
   void updateCurrentUserProgress();
   updateDashboard();
@@ -634,9 +634,10 @@ function handleFailedPhase(reason) {
   isRoundLocked = true;
   setControlsEnabled(false);
   streak = 0;
+  void saveRanking(currentScore);
+  currentScore = 0;
   void updateCurrentUserProgress();
   updateDashboard();
-  void saveRanking(currentScore);
   const answerText = currentQuestion.answer.join(" - ");
   noteRibbon.textContent = `Resposta: ${answerText}`;
   setFeedback(`${reason}. Resposta correta: ${answerText}.`, reason === "Tempo esgotado" ? "warning" : "error");
