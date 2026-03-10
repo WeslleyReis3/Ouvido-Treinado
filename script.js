@@ -39,6 +39,8 @@ const passwordInput = document.getElementById("passwordInput");
 const registerNameInput = document.getElementById("registerNameInput");
 const registerNicknameInput = document.getElementById("registerNicknameInput");
 const registerPasswordInput = document.getElementById("registerPasswordInput");
+const saveRegisterButton = document.getElementById("saveRegisterButton");
+const backToLoginWrapper = document.getElementById("backToLoginWrapper");
 const authMessage = document.getElementById("authMessage");
 const authTitle = document.getElementById("authTitle");
 const authDescription = document.getElementById("authDescription");
@@ -100,6 +102,8 @@ function setAuthMode(registerMode) {
   isRegisterMode = registerMode;
   authForm.classList.toggle("hidden", registerMode);
   registerForm.classList.toggle("hidden", !registerMode);
+  backToLoginWrapper.classList.add("hidden");
+  saveRegisterButton.disabled = false;
   authTitle.textContent = registerMode ? "Cadastre um novo usuario" : "Entre com seu apelido";
   authDescription.textContent = registerMode
     ? "Informe nome de usuario, apelido para login e uma senha para criar seu acesso neste dispositivo."
@@ -169,9 +173,9 @@ function handleRegister(event) {
 
   nicknameInput.value = nickname;
   passwordInput.value = password;
-  registerForm.reset();
-  setAuthMode(false);
-  authMessage.textContent = "Cadastro realizado. Agora entre com seu apelido e senha.";
+  saveRegisterButton.disabled = true;
+  backToLoginWrapper.classList.remove("hidden");
+  authMessage.textContent = "Cadastro realizado. Clique em voltar para fazer login.";
 }
 
 /**
