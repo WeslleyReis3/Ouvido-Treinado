@@ -33,6 +33,7 @@ let currentQuestion = null;
 let selectedAnswer = [];
 let currentUser = null;
 let isRegisterMode = false;
+let pendingResumeState = null;
 
 const authScreen = document.getElementById("authScreen");
 const authForm = document.getElementById("authForm");
@@ -59,6 +60,10 @@ const logoutButton = document.getElementById("logoutButton");
 const replayButton = document.getElementById("replayButton");
 const clearButton = document.getElementById("clearButton");
 const welcomeChip = document.getElementById("welcomeChip");
+const resumePanel = document.getElementById("resumePanel");
+const resumeText = document.getElementById("resumeText");
+const resumeYesButton = document.getElementById("resumeYesButton");
+const resumeNoButton = document.getElementById("resumeNoButton");
 const phaseLabel = document.getElementById("phaseLabel");
 const timerDisplay = document.getElementById("timerDisplay");
 const attemptsDisplay = document.getElementById("attemptsDisplay");
@@ -92,6 +97,8 @@ startButton.addEventListener("click", startGame);
 resetGameButton.addEventListener("click", resetGame);
 logoutButton.addEventListener("click", logout);
 masterLogoutButton.addEventListener("click", logout);
+resumeYesButton.addEventListener("click", resumeSavedGame);
+resumeNoButton.addEventListener("click", discardSavedGame);
 replayButton.addEventListener("click", () => playNoteSequence(false));
 clearButton.addEventListener("click", () => {
   if (isRoundLocked || isPlayingSequence) return;
@@ -233,7 +240,7 @@ async function handleLogin(event) {
   }
 
   if (nickname === MASTER_NICKNAME && password === MASTER_PASSWORD) {
-    currentUser = {
+  currentUser = {
       username: "Master",
       nickname: MASTER_NICKNAME,
       role: "master"
@@ -265,7 +272,8 @@ async function handleLogin(event) {
     foundUser = {
       username: localUser.username,
       nickname: localUser.nickname,
-      role: "player"
+      role: "player",
+      stats: localUser.stats
     };
   }
 
@@ -273,6 +281,7 @@ async function handleLogin(event) {
   localStorage.setItem(AUTH_KEY, JSON.stringify(currentUser));
   passwordInput.value = "";
   authMessage.textContent = "Acesso liberado. Bom treino.";
+  prepareResumeState();
   updateUserInterface();
 }
 
@@ -339,12 +348,14 @@ function updateUserInterface() {
   masterScreen.classList.toggle("hidden", !isMaster);
   rankingCard.classList.toggle("hidden", isMaster);
   welcomeChip.textContent = isAuthenticated ? `Jogador: ${currentUser.nickname}` : "Modo absoluto";
+  resumePanel.classList.toggle("hidden", !(isAuthenticated && !isMaster && pendingResumeState));
 }
 
 function logout() {
   stopTimer();
   localStorage.removeItem(AUTH_KEY);
   currentUser = null;
+  pendingResumeState = null;
   currentQuestion = null;
   selectedAnswer = [];
   isRoundLocked = false;
@@ -384,6 +395,7 @@ async function startGame() {
 
 function resetGame() {
   void saveRanking(currentScore);
+  void clearSavedProgress();
   stopTimer();
   currentPhase = 1;
   currentScore = 0;
@@ -635,7 +647,6 @@ function handleFailedPhase(reason) {
   setControlsEnabled(false);
   streak = 0;
   void saveRanking(currentScore);
-  currentScore = 0;
   void updateCurrentUserProgress();
   updateDashboard();
   const answerText = currentQuestion.answer.join(" - ");
@@ -643,8 +654,13 @@ function handleFailedPhase(reason) {
   setFeedback(`${reason}. Resposta correta: ${answerText}.`, reason === "Tempo esgotado" ? "warning" : "error");
   highlightAnswerButtons("wrong-glow");
   clearFeedbackActions();
-  appendActionButton("Tentar novamente", startPhase, "ghost-button");
+  appendActionButton("Tentar novamente", retryPhase, "ghost-button");
   flashGameCard("error-flash");
+}
+
+function retryPhase() {
+  updateDashboard();
+  startPhase();
 }
 
 function updateDashboard() {
@@ -782,7 +798,7 @@ async function saveRanking(score) {
   const nextRanking = ranking.filter((entry) => entry.nickname !== normalizedNickname);
   nextRanking.push(nextEntry);
   nextRanking.sort((left, right) => right.score - left.score);
-  localStorage.setItem(RANKING_KEY, JSON.stringify(nextRanking.slice(0, 10)));
+  localStorage.setItem(RANKING_KEY, JSON.stringify(nextRanking.slice(0, 15)));
 
   await updateCurrentUserProgress(score, currentPhase, true);
   await renderRanking();
@@ -812,15 +828,9 @@ async function renderRanking() {
     : getRankingLocal();
 
   rankingList.innerHTML = "";
+  const visibleRanking = ranking.slice(0, 15);
 
-  if (!ranking.length) {
-    const item = document.createElement("li");
-    item.textContent = "Nenhuma pontuação registrada ainda.";
-    rankingList.appendChild(item);
-    return;
-  }
-
-  ranking.forEach((entry, index) => {
+  visibleRanking.forEach((entry, index) => {
     const item = document.createElement("li");
     item.className = "ranking-item";
 
@@ -839,6 +849,26 @@ async function renderRanking() {
     item.append(position, player, meta);
     rankingList.appendChild(item);
   });
+
+  for (let index = visibleRanking.length; index < 15; index += 1) {
+    const item = document.createElement("li");
+    item.className = "ranking-item";
+
+    const position = document.createElement("strong");
+    position.className = "ranking-position";
+    position.textContent = `${index + 1}º lugar`;
+
+    const player = document.createElement("span");
+    player.className = "ranking-player";
+    player.textContent = "Aguardando pontuação";
+
+    const meta = document.createElement("span");
+    meta.className = "ranking-meta";
+    meta.textContent = "Sem jogador registrado";
+
+    item.append(position, player, meta);
+    rankingList.appendChild(item);
+  }
 }
 
 async function updateCurrentUserProgress(score = currentScore, phase = currentPhase, bestCheck = false) {
@@ -868,6 +898,9 @@ async function updateCurrentUserProgress(score = currentScore, phase = currentPh
 
   stats.lastPhase = phase;
   stats.lastDate = new Date().toLocaleDateString("pt-BR");
+  stats.currentScore = score;
+  stats.currentPhase = phase;
+  stats.hasSavedProgress = true;
 
   if (bestCheck || score > previousBest) {
     stats.bestScore = Math.max(previousBest, score);
@@ -908,6 +941,9 @@ async function registerPhaseError(phase) {
   stats.errorsByPhase[key] = (stats.errorsByPhase[key] || 0) + 1;
   stats.lastPhase = phase;
   stats.lastDate = new Date().toLocaleDateString("pt-BR");
+  stats.currentScore = currentScore;
+  stats.currentPhase = phase;
+  stats.hasSavedProgress = true;
 
   user.stats = stats;
   users[userIndex] = user;
@@ -980,4 +1016,74 @@ async function renderMasterDashboard() {
 
     masterTableBody.appendChild(row);
   });
+}
+
+function prepareResumeState() {
+  const stats = currentUser?.stats || {};
+  const resumePhase = Number(stats.currentPhase || 1);
+  const resumeScore = Number(stats.currentScore || 0);
+  const hasSavedProgress = Boolean(stats.hasSavedProgress) && (resumeScore > 0 || resumePhase > 1);
+
+  pendingResumeState = hasSavedProgress
+    ? {
+        phase: resumePhase,
+        score: resumeScore
+      }
+    : null;
+
+  if (pendingResumeState) {
+    resumeText.textContent = `Encontramos um progresso salvo com ${pendingResumeState.score} pts na fase ${pendingResumeState.phase}.`;
+  }
+}
+
+function resumeSavedGame() {
+  if (!pendingResumeState) return;
+  currentPhase = pendingResumeState.phase;
+  currentScore = pendingResumeState.score;
+  streak = 0;
+  pendingResumeState = null;
+  updateUserInterface();
+
+  if (!audioContext) {
+    audioContext = new (window.AudioContext || window.webkitAudioContext)();
+  }
+
+  audioContext.resume().then(() => {
+    startScreen.classList.add("hidden");
+    gameScreen.classList.remove("hidden");
+    startPhase();
+  });
+}
+
+function discardSavedGame() {
+  pendingResumeState = null;
+  currentPhase = 1;
+  currentScore = 0;
+  streak = 0;
+  updateDashboard();
+  updateUserInterface();
+  void clearSavedProgress();
+}
+
+async function clearSavedProgress() {
+  if (!currentUser || currentUser.role === "master") return;
+
+  if (isRemoteBackendEnabled()) {
+    await apiPost("clear_progress", {
+      nickname: currentUser.nickname
+    });
+    return;
+  }
+
+  const users = getUsersLocal();
+  const userIndex = users.findIndex((user) => user.nickname === currentUser.nickname);
+  if (userIndex === -1) return;
+  users[userIndex].stats = {
+    ...createDefaultStats(),
+    ...(users[userIndex].stats || {}),
+    currentScore: 0,
+    currentPhase: 1,
+    hasSavedProgress: false
+  };
+  saveUsersLocal(users);
 }

@@ -77,8 +77,8 @@ function registerUser_(payload) {
                         return { ok: false, error: "Esse apelido ja esta em uso." };
                   }
 
-                    usersSheet.appendRow([username, nickname, password, 0, 0, 0, "-", "{}"]);
-                      return { ok: true };
+  usersSheet.appendRow([username, nickname, password, 0, 0, 0, "-", "{}"]);
+  return { ok: true };
 }
 
 function loginUser_(payload) {
@@ -93,12 +93,13 @@ function loginUser_(payload) {
 
               return {
                     ok: true,
-                        user: {
-                                username: foundUser.username,
-                                      nickname: foundUser.nickname,
-                                            role: "player"
-                        }
-              };
+    user: {
+      username: foundUser.username,
+      nickname: foundUser.nickname,
+      role: "player",
+      stats: foundUser.stats
+    }
+  };
 }
 
 function saveScore_(payload) {
@@ -113,14 +114,21 @@ function saveScore_(payload) {
                       return { ok: false, error: "Usuario nao encontrado." };
                 }
 
-                  const usersSheet = getOrCreateSheet_(SHEET_NAMES.USERS, []);
-                    const rowIndex = findUserRow_(nickname);
+  const usersSheet = getOrCreateSheet_(SHEET_NAMES.USERS, []);
+  const rowIndex = findUserRow_(nickname);
 
-                      const bestScore = Math.max(Number(user.bestScore || 0), score);
-                        const bestPhase = score >= Number(user.bestScore || 0) ? phase : Number(user.bestPhase || 0);
-                          usersSheet.getRange(rowIndex, 4, 1, 4).setValues([[bestScore, bestPhase, phase, date]]);
+  const bestScore = Math.max(Number(user.bestScore || 0), score);
+  const bestPhase = score >= Number(user.bestScore || 0) ? phase : Number(user.bestPhase || 0);
+  const stats = {
+    ...(user.stats || {}),
+    currentScore: score,
+    currentPhase: phase,
+    hasSavedProgress: true
+  };
+  usersSheet.getRange(rowIndex, 4, 1, 4).setValues([[bestScore, bestPhase, phase, date]]);
+  usersSheet.getRange(rowIndex, 8).setValue(JSON.stringify(stats));
 
-                            upsertRanking_(nickname, score, phase, date);
+  upsertRanking_(nickname, score, phase, date);
 
                               return {
                                     ok: true,
@@ -144,11 +152,19 @@ function syncProgress_(payload) {
                   const usersSheet = getOrCreateSheet_(SHEET_NAMES.USERS, []);
                     const rowIndex = findUserRow_(nickname);
 
-                      const bestScore = Math.max(Number(user.bestScore || 0), score);
-                        const bestPhase = bestScore > Number(user.bestScore || 0) ? phase : Number(user.bestPhase || 0);
-                          usersSheet.getRange(rowIndex, 4, 1, 4).setValues([[bestScore, bestPhase, phase, date]]);
+  const previousBest = Number(user.bestScore || 0);
+  const bestScore = Math.max(previousBest, score);
+  const bestPhase = score > previousBest ? phase : Number(user.bestPhase || 0);
+  const stats = {
+    ...(user.stats || {}),
+    currentScore: score,
+    currentPhase: phase,
+    hasSavedProgress: true
+  };
+  usersSheet.getRange(rowIndex, 4, 1, 4).setValues([[bestScore, bestPhase, phase, date]]);
+  usersSheet.getRange(rowIndex, 8).setValue(JSON.stringify(stats));
 
-                            return { ok: true };
+  return { ok: true };
 }
 
 function incrementError_(payload) {
@@ -160,14 +176,40 @@ function incrementError_(payload) {
                   return { ok: false, error: "Usuario nao encontrado." };
             }
 
-              const errors = user.errorsByPhase || {};
-                errors[phase] = (errors[phase] || 0) + 1;
+  const stats = user.stats || {};
+  const errors = stats.errorsByPhase || {};
+  errors[phase] = (errors[phase] || 0) + 1;
 
-                  const usersSheet = getOrCreateSheet_(SHEET_NAMES.USERS, []);
-                    const rowIndex = findUserRow_(nickname);
-                      usersSheet.getRange(rowIndex, 8).setValue(JSON.stringify(errors));
+  const usersSheet = getOrCreateSheet_(SHEET_NAMES.USERS, []);
+  const rowIndex = findUserRow_(nickname);
+  usersSheet.getRange(rowIndex, 8).setValue(JSON.stringify({
+    ...stats,
+    errorsByPhase: errors
+  }));
 
-                        return { ok: true };
+  return { ok: true };
+}
+
+function clearProgress_(payload) {
+  const nickname = String(payload.nickname || "").trim();
+  const users = getUsers_();
+  const user = users.find((entry) => entry.nickname === nickname);
+  if (!user) {
+    return { ok: false, error: "Usuario nao encontrado." };
+  }
+
+  const usersSheet = getOrCreateSheet_(SHEET_NAMES.USERS, []);
+  const rowIndex = findUserRow_(nickname);
+  const stats = {
+    ...(user.stats || {}),
+    currentScore: 0,
+    currentPhase: 1,
+    hasSavedProgress: false
+  };
+  usersSheet.getRange(rowIndex, 5, 1, 3).setValues([[Number(user.bestPhase || 0), 1, Utilities.formatDate(new Date(), Session.getScriptTimeZone(), "dd/MM/yyyy")]]);
+  usersSheet.getRange(rowIndex, 8).setValue(JSON.stringify(stats));
+
+  return { ok: true };
 }
 
 function upsertRanking_(nickname, score, phase, date) {
@@ -215,8 +257,9 @@ function getUsers_() {
     bestPhase: Number(row[4] || 0),
     lastPhase: Number(row[5] || 0),
     lastDate: row[6] || "-",
-                                            errorsByPhase: safeParse_(row[7])
-          }));
+    stats: normalizeStats_(safeParse_(row[7])),
+    errorsByPhase: normalizeStats_(safeParse_(row[7])).errorsByPhase
+  }));
 }
 
 function getRanking_() {
@@ -284,6 +327,15 @@ function safeParse_(value) {
     } catch (error) {
           return {};
     }
+}
+
+function normalizeStats_(stats) {
+  return {
+    currentScore: Number(stats.currentScore || 0),
+    currentPhase: Number(stats.currentPhase || 1),
+    hasSavedProgress: Boolean(stats.hasSavedProgress),
+    errorsByPhase: stats.errorsByPhase || {}
+  };
 }
 
 function jsonOutput(payload) {

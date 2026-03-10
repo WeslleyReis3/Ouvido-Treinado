@@ -309,7 +309,34 @@ button {
   gap: 16px;
 }
 
+.resume-panel {
+  display: grid;
+  gap: 14px;
+  padding: 18px;
+  border: 1px solid rgba(54, 211, 255, 0.16);
+  border-radius: var(--radius-lg);
+  background: rgba(54, 211, 255, 0.08);
+}
+
+.resume-title {
+  margin: 0;
+  color: var(--text);
+  font-size: 1.1rem;
+  font-weight: 700;
+}
+
+.resume-text {
+  margin: 0;
+  color: var(--muted);
+}
+
 .auth-buttons {
+  display: flex;
+  gap: 14px;
+  flex-wrap: wrap;
+}
+
+.resume-actions {
   display: flex;
   gap: 14px;
   flex-wrap: wrap;
@@ -914,7 +941,8 @@ button {
   .answer-actions,
   .feedback-actions,
   .ranking-actions,
-  .auth-buttons {
+  .auth-buttons,
+  .resume-actions {
     width: 100%;
     justify-content: center;
   }
@@ -1084,7 +1112,8 @@ button {
   .answer-actions,
   .feedback-actions,
   .ranking-actions,
-  .auth-buttons {
+  .auth-buttons,
+  .resume-actions {
     gap: 10px;
   }
 
