@@ -1,0 +1,149 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Treinador de Ouvido Musical</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <div class="bg-orb bg-orb-left" aria-hidden="true"></div>
+  <div class="bg-orb bg-orb-right" aria-hidden="true"></div>
+  <main class="app-shell">
+    <section class="hero-card" id="startScreen">
+      <div class="hero-topline">
+        <div class="brand-badge">
+          <span class="brand-icon">♪</span>
+          <span>Ear Training Studio</span>
+        </div>
+        <div class="hero-chip">Modo absoluto</div>
+      </div>
+
+      <div class="hero-copy">
+        <p class="eyebrow">Treinamento auditivo interativo</p>
+        <h1>Treinador de Ouvido Musical</h1>
+        <p class="hero-text">
+          Escute notas geradas em tempo real, memorize a sequência e responda antes do tempo acabar.
+          O desafio cresce por fases para desenvolver percepção tonal, memória auditiva e precisão.
+        </p>
+      </div>
+
+      <div class="hero-meta">
+        <div class="meta-card">
+          <div class="meta-icon">♫</div>
+          <span>Fases</span>
+          <strong>1 a 5</strong>
+          <p>1 nota por rodada</p>
+        </div>
+        <div class="meta-card">
+          <div class="meta-icon">♬</div>
+          <span>Fases</span>
+          <strong>6 a 10</strong>
+          <p>2 notas em sequência</p>
+        </div>
+        <div class="meta-card">
+          <div class="meta-icon">♩</div>
+          <span>Fases</span>
+          <strong>11+</strong>
+          <p>3 notas em sequência</p>
+        </div>
+      </div>
+
+      <button class="primary-button hero-button" id="startButton">Iniciar treino</button>
+    </section>
+
+    <section class="game-card hidden" id="gameScreen">
+      <header class="topbar">
+        <div>
+          <p class="eyebrow">Desafio atual</p>
+          <h2 id="phaseLabel">Fase 1</h2>
+        </div>
+        <div class="topbar-stats">
+          <div class="pill" id="timerDisplay">60s</div>
+          <div class="pill" id="attemptsDisplay">2 tentativas</div>
+        </div>
+      </header>
+
+      <div class="progress-section">
+        <div class="progress-copy">
+          <span>Progresso</span>
+          <strong id="progressText">Fase 1 de 15</strong>
+        </div>
+        <div class="progress-track">
+          <div class="progress-fill" id="progressFill"></div>
+        </div>
+      </div>
+
+      <section class="status-grid">
+        <article class="score-card">
+          <span>Pontuação</span>
+          <strong id="scoreDisplay">0</strong>
+        </article>
+        <article class="score-card">
+          <span>Sequência</span>
+          <strong id="streakDisplay">0</strong>
+        </article>
+        <article class="score-card">
+          <span>Notas na fase</span>
+          <strong id="notesCountDisplay">1</strong>
+        </article>
+      </section>
+
+      <section class="audio-stage">
+        <div class="stage-halo" aria-hidden="true"></div>
+        <div class="turntable" aria-hidden="true">
+          <div class="turntable-disc"></div>
+          <div class="turntable-arm"></div>
+        </div>
+        <div class="sound-visualizer" id="visualizer" aria-hidden="true">
+          <span></span>
+          <span></span>
+          <span></span>
+          <span></span>
+          <span></span>
+          <span></span>
+          <span></span>
+          <span></span>
+        </div>
+        <div class="note-ribbon" id="noteRibbon" aria-live="polite">Pronto para tocar</div>
+        <p class="instruction" id="instructionText">Prepare-se para ouvir a primeira nota.</p>
+      </section>
+
+      <section class="answer-panel">
+        <div class="answer-header">
+          <h3>Sua resposta</h3>
+          <div class="answer-actions">
+            <button class="ghost-button" id="replayButton" type="button">Ouvir novamente</button>
+            <button class="ghost-button" id="clearButton" type="button">Limpar resposta</button>
+          </div>
+        </div>
+        <div class="answer-slots" id="answerSlots"></div>
+      </section>
+
+      <section class="choices-panel">
+        <h3>Escolha as notas</h3>
+        <div class="choices-grid" id="choicesContainer"></div>
+      </section>
+
+      <section class="feedback-panel" id="feedbackPanel">
+        <div class="feedback-icon" id="feedbackIcon" aria-hidden="true">♪</div>
+        <p class="feedback-message" id="feedbackMessage">Escute a sequência para começar.</p>
+        <div class="feedback-actions" id="feedbackActions"></div>
+      </section>
+    </section>
+
+    <aside class="ranking-card">
+      <div class="ranking-header">
+        <div>
+          <p class="eyebrow">Ranking local</p>
+          <h2>Melhores resultados</h2>
+        </div>
+        <button class="ghost-button" id="resetGameButton" type="button">Reiniciar jogo</button>
+      </div>
+      <ol id="rankingList" class="ranking-list"></ol>
+    </aside>
+  </main>
+
+  <script src="script.js"></script>
+</body>
+</html>
