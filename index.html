@@ -21,9 +21,9 @@
 
       <div class="hero-copy">
         <p class="eyebrow">Entre para começar</p>
-        <h1>Use um apelido e qualquer senha</h1>
+        <h1 id="authTitle">Entre com seu apelido</h1>
         <p class="hero-text">
-          O apelido identifica o jogador no dispositivo. A senha pode ser qualquer valor, basta preencher para liberar o treino.
+          <span id="authDescription">Use seu apelido cadastrado e sua senha para liberar o treino.</span>
         </p>
       </div>
 
@@ -38,7 +38,32 @@
           <input id="passwordInput" name="password" type="password" placeholder="Digite qualquer senha" required>
         </label>
 
-        <button class="primary-button auth-button" type="submit">Entrar</button>
+        <div class="auth-buttons">
+          <button class="primary-button auth-button" type="submit">Entrar</button>
+          <button class="ghost-button auth-button" id="openRegisterButton" type="button">Cadastrar novo usuario</button>
+        </div>
+      </form>
+
+      <form class="auth-form hidden" id="registerForm">
+        <label class="auth-field">
+          <span>Nome de usuario</span>
+          <input id="registerNameInput" name="username" type="text" maxlength="32" placeholder="Ex.: Weslley Reis" required>
+        </label>
+
+        <label class="auth-field">
+          <span>Apelido para login</span>
+          <input id="registerNicknameInput" name="registerNickname" type="text" maxlength="24" placeholder="Ex.: Maestro99" required>
+        </label>
+
+        <label class="auth-field">
+          <span>Senha</span>
+          <input id="registerPasswordInput" name="registerPassword" type="password" placeholder="Crie sua senha" required>
+        </label>
+
+        <div class="auth-buttons">
+          <button class="primary-button auth-button" type="submit">Cadastrar</button>
+          <button class="ghost-button auth-button" id="backToLoginButton" type="button">Voltar para login</button>
+        </div>
       </form>
 
       <p class="auth-message" id="authMessage">Preencha os dois campos para liberar o treino.</p>

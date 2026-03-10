@@ -15,6 +15,7 @@ const NOTE_GAP = 800;
 const MAX_ATTEMPTS = 2;
 const RANKING_KEY = "ouvido-treinado-ranking";
 const AUTH_KEY = "ouvido-treinado-user";
+const USERS_KEY = "ouvido-treinado-users";
 
 let audioContext;
 let currentPhase = 1;
@@ -28,12 +29,21 @@ let isRoundLocked = false;
 let currentQuestion = null;
 let selectedAnswer = [];
 let currentUser = null;
+let isRegisterMode = false;
 
 const authScreen = document.getElementById("authScreen");
 const authForm = document.getElementById("authForm");
+const registerForm = document.getElementById("registerForm");
 const nicknameInput = document.getElementById("nicknameInput");
 const passwordInput = document.getElementById("passwordInput");
+const registerNameInput = document.getElementById("registerNameInput");
+const registerNicknameInput = document.getElementById("registerNicknameInput");
+const registerPasswordInput = document.getElementById("registerPasswordInput");
 const authMessage = document.getElementById("authMessage");
+const authTitle = document.getElementById("authTitle");
+const authDescription = document.getElementById("authDescription");
+const openRegisterButton = document.getElementById("openRegisterButton");
+const backToLoginButton = document.getElementById("backToLoginButton");
 const startScreen = document.getElementById("startScreen");
 const gameScreen = document.getElementById("gameScreen");
 const startButton = document.getElementById("startButton");
@@ -64,6 +74,9 @@ const noteRibbon = document.getElementById("noteRibbon");
 const audioStage = document.querySelector(".audio-stage");
 
 authForm.addEventListener("submit", handleLogin);
+registerForm.addEventListener("submit", handleRegister);
+openRegisterButton.addEventListener("click", () => setAuthMode(true));
+backToLoginButton.addEventListener("click", () => setAuthMode(false));
 startButton.addEventListener("click", startGame);
 resetGameButton.addEventListener("click", resetGame);
 logoutButton.addEventListener("click", logout);
@@ -77,10 +90,27 @@ clearButton.addEventListener("click", () => {
 
 renderRanking();
 restoreUserSession();
+setAuthMode(false);
 updateDashboard();
 
 /**
- * Valida o formulário de acesso e salva localmente o apelido informado.
+ * Alterna entre os modos de login e cadastro da área de autenticação.
+ */
+function setAuthMode(registerMode) {
+  isRegisterMode = registerMode;
+  authForm.classList.toggle("hidden", registerMode);
+  registerForm.classList.toggle("hidden", !registerMode);
+  authTitle.textContent = registerMode ? "Cadastre um novo usuario" : "Entre com seu apelido";
+  authDescription.textContent = registerMode
+    ? "Informe nome de usuario, apelido para login e uma senha para criar seu acesso neste dispositivo."
+    : "Use seu apelido cadastrado e sua senha para liberar o treino.";
+  authMessage.textContent = registerMode
+    ? "Preencha os tres campos para criar seu acesso."
+    : "Preencha apelido e senha para entrar.";
+}
+
+/**
+ * Valida o formulário de acesso e autentica um usuário cadastrado localmente.
  */
 function handleLogin(event) {
   event.preventDefault();
@@ -93,11 +123,55 @@ function handleLogin(event) {
     return;
   }
 
-  currentUser = { nickname };
+  const registeredUsers = getUsers();
+  const foundUser = registeredUsers.find((user) => user.nickname === nickname);
+
+  if (!foundUser || foundUser.password !== password) {
+    authMessage.textContent = "Apelido ou senha incorretos.";
+    return;
+  }
+
+  currentUser = {
+    username: foundUser.username,
+    nickname: foundUser.nickname
+  };
   localStorage.setItem(AUTH_KEY, JSON.stringify(currentUser));
   passwordInput.value = "";
   authMessage.textContent = "Acesso liberado. Bom treino.";
   updateUserInterface();
+}
+
+/**
+ * Cadastra um novo usuário local no navegador para ser usado no login.
+ */
+function handleRegister(event) {
+  event.preventDefault();
+
+  const username = registerNameInput.value.trim();
+  const nickname = registerNicknameInput.value.trim();
+  const password = registerPasswordInput.value.trim();
+
+  if (!username || !nickname || !password) {
+    authMessage.textContent = "Preencha nome de usuario, apelido e senha.";
+    return;
+  }
+
+  const users = getUsers();
+  const nicknameExists = users.some((user) => user.nickname.toLowerCase() === nickname.toLowerCase());
+
+  if (nicknameExists) {
+    authMessage.textContent = "Esse apelido ja esta em uso. Escolha outro.";
+    return;
+  }
+
+  users.push({ username, nickname, password });
+  localStorage.setItem(USERS_KEY, JSON.stringify(users));
+
+  nicknameInput.value = nickname;
+  passwordInput.value = password;
+  registerForm.reset();
+  setAuthMode(false);
+  authMessage.textContent = "Cadastro realizado. Agora entre com seu apelido e senha.";
 }
 
 /**
@@ -111,6 +185,17 @@ function restoreUserSession() {
   }
 
   updateUserInterface();
+}
+
+/**
+ * Lê a base local de usuários cadastrados no navegador.
+ */
+function getUsers() {
+  try {
+    return JSON.parse(localStorage.getItem(USERS_KEY)) || [];
+  } catch (error) {
+    return [];
+  }
 }
 
 /**
@@ -140,6 +225,8 @@ function logout() {
   authMessage.textContent = "Sessão encerrada. Entre novamente para continuar.";
   nicknameInput.value = "";
   passwordInput.value = "";
+  registerForm.reset();
+  setAuthMode(false);
   updateUserInterface();
 }
 
@@ -461,6 +548,7 @@ function handleFailedPhase(reason) {
   setControlsEnabled(false);
   streak = 0;
   updateDashboard();
+  saveRanking(currentScore);
   const answerText = currentQuestion.answer.join(" - ");
   noteRibbon.textContent = `Resposta: ${answerText}`;
   setFeedback(`${reason}. Resposta correta: ${answerText}.`, reason === "Tempo esgotado" ? "warning" : "error");
@@ -612,20 +700,32 @@ function highlightAnswerButtons(className) {
  * Persiste a pontuação da sessão no ranking local, mantendo apenas os melhores registros.
  */
 function saveRanking(score) {
-  if (!score) {
+  if (!score || !currentUser?.nickname) {
     renderRanking();
     return;
   }
 
   const ranking = getRanking();
-  ranking.push({
+  const normalizedNickname = currentUser.nickname.trim();
+  const existingEntry = ranking.find((entry) => entry.nickname === normalizedNickname);
+
+  if (existingEntry && existingEntry.score >= score) {
+    renderRanking();
+    return;
+  }
+
+  const nextEntry = {
+    nickname: normalizedNickname,
     score,
     phase: currentPhase,
     date: new Date().toLocaleDateString("pt-BR")
-  });
+  };
 
-  ranking.sort((left, right) => right.score - left.score);
-  localStorage.setItem(RANKING_KEY, JSON.stringify(ranking.slice(0, 5)));
+  const nextRanking = ranking.filter((entry) => entry.nickname !== normalizedNickname);
+  nextRanking.push(nextEntry);
+
+  nextRanking.sort((left, right) => right.score - left.score);
+  localStorage.setItem(RANKING_KEY, JSON.stringify(nextRanking.slice(0, 10)));
   renderRanking();
 }
 
@@ -656,7 +756,21 @@ function renderRanking() {
 
   ranking.forEach((entry, index) => {
     const item = document.createElement("li");
-    item.textContent = `${index + 1}º lugar • ${entry.score} pts • fase ${entry.phase} • ${entry.date}`;
+    item.className = "ranking-item";
+
+    const position = document.createElement("strong");
+    position.className = "ranking-position";
+    position.textContent = `${index + 1}º lugar`;
+
+    const player = document.createElement("span");
+    player.className = "ranking-player";
+    player.textContent = `${entry.nickname} • ${entry.score} pts`;
+
+    const meta = document.createElement("span");
+    meta.className = "ranking-meta";
+    meta.textContent = `Fase ${entry.phase} • ${entry.date}`;
+
+    item.append(position, player, meta);
     rankingList.appendChild(item);
   });
 }

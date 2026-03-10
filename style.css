@@ -309,6 +309,12 @@ button {
   gap: 16px;
 }
 
+.auth-buttons {
+  display: flex;
+  gap: 14px;
+  flex-wrap: wrap;
+}
+
 .auth-field {
   display: grid;
   gap: 10px;
@@ -714,6 +720,32 @@ button {
   border: 1px solid rgba(255, 255, 255, 0.06);
 }
 
+.ranking-item {
+  display: grid;
+  gap: 6px;
+}
+
+.ranking-position,
+.ranking-player,
+.ranking-meta {
+  display: block;
+}
+
+.ranking-position {
+  color: var(--text);
+  font-size: 1rem;
+}
+
+.ranking-player {
+  color: #d8e4f6;
+  font-weight: 700;
+}
+
+.ranking-meta {
+  color: var(--muted);
+  font-size: 0.9rem;
+}
+
 .result-flash {
   animation: flash 460ms ease;
 }
@@ -839,7 +871,8 @@ button {
   .topbar-stats,
   .answer-actions,
   .feedback-actions,
-  .ranking-actions {
+  .ranking-actions,
+  .auth-buttons {
     width: 100%;
     justify-content: center;
   }
@@ -1008,7 +1041,8 @@ button {
   .topbar-stats,
   .answer-actions,
   .feedback-actions,
-  .ranking-actions {
+  .ranking-actions,
+  .auth-buttons {
     gap: 10px;
   }
 
