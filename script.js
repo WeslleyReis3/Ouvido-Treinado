@@ -701,6 +701,11 @@ function handleFailedPhase(reason) {
 }
 
 function retryPhase() {
+  if (currentScore > 0) {
+    currentScore = Math.max(0, currentScore - 50);
+    void updateCurrentUserProgress();
+  }
+
   updateDashboard();
   startPhase();
 }
