@@ -154,9 +154,46 @@ async function fetchRemoteUsers() {
   return result.users || [];
 }
 
+function buildRemoteRanking(result) {
+  const users = result.users || [];
+  const rawRanking = result.ranking || [];
+  const rankingMap = new Map(
+    rawRanking.map((entry) => [
+      String(entry.nickname || "").trim(),
+      {
+        nickname: String(entry.nickname || "").trim(),
+        score: Number(entry.score || 0),
+        phase: Number(entry.phase || 0),
+        date: entry.date || "-"
+      }
+    ])
+  );
+
+  users.forEach((user) => {
+    const nickname = String(user.nickname || "").trim();
+    const bestScore = Number(user.bestScore || user.stats?.bestScore || 0);
+    const bestPhase = Number(user.bestPhase || user.stats?.bestPhase || user.lastPhase || 0);
+    const bestDate = user.lastDate || "-";
+    const existing = rankingMap.get(nickname);
+
+    if (!existing || bestScore > existing.score) {
+      rankingMap.set(nickname, {
+        nickname,
+        score: bestScore,
+        phase: bestPhase,
+        date: bestDate
+      });
+    }
+  });
+
+  return Array.from(rankingMap.values())
+    .filter((entry) => entry.nickname && entry.score > 0)
+    .sort((left, right) => right.score - left.score || left.nickname.localeCompare(right.nickname));
+}
+
 async function fetchRemoteRanking() {
   const result = await apiGet("dashboard");
-  return result.ranking || [];
+  return buildRemoteRanking(result);
 }
 
 function createDefaultStats() {
@@ -959,12 +996,17 @@ async function registerPhaseError(phase) {
 async function renderMasterDashboard() {
   if (!masterTableBody) return;
 
-  const users = isRemoteBackendEnabled()
-    ? await fetchRemoteUsers()
-    : getUsersLocal();
-  const ranking = isRemoteBackendEnabled()
-    ? await fetchRemoteRanking()
-    : getRankingLocal();
+  let users;
+  let ranking;
+
+  if (isRemoteBackendEnabled()) {
+    const dashboard = await apiGet("dashboard");
+    users = dashboard.users || [];
+    ranking = buildRemoteRanking(dashboard);
+  } else {
+    users = getUsersLocal();
+    ranking = getRankingLocal();
+  }
 
   const rankingMap = new Map(ranking.map((entry, index) => [entry.nickname, index + 1]));
   masterTableBody.innerHTML = "";
